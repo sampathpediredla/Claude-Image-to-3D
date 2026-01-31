@@ -89,6 +89,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     });
 
     const data = await response.json();
+    console.log('Tripo upload response:', JSON.stringify(data, null, 2));
 
     // Determine the file extension for later use
     const mimeToExt = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
@@ -101,9 +102,12 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: data.message || 'Upload failed', details: data });
     }
 
+    // The upload response may use image_token or file_token depending on endpoint
+    const token = data.data.image_token || data.data.file_token;
+
     res.json({
       success: true,
-      image_token: data.data.image_token,
+      image_token: token,
       file_type: fileType,
     });
   } catch (err) {
@@ -131,13 +135,15 @@ app.post('/api/generate', async (req, res) => {
       type: 'image_to_model',
       file: {
         type: file_type || 'jpg',
-        image_token,
+        file_token: image_token,
       },
     };
 
     if (model_version) {
       body.model_version = model_version;
     }
+
+    console.log('Tripo generate request:', JSON.stringify(body, null, 2));
 
     const response = await fetch(`${TRIPO_BASE}/task`, {
       method: 'POST',
@@ -149,6 +155,7 @@ app.post('/api/generate', async (req, res) => {
     });
 
     const data = await response.json();
+    console.log('Tripo generate response:', JSON.stringify(data, null, 2));
 
     if (data.code !== 0) {
       return res.status(400).json({ error: data.message || 'Task creation failed', details: data });
@@ -180,7 +187,7 @@ app.post('/api/generate-multiview', async (req, res) => {
   try {
     const files = image_tokens.map((token, i) => ({
       type: (file_types && file_types[i]) || 'jpg',
-      image_token: token,
+      file_token: token,
     }));
 
     const body = {
@@ -192,6 +199,8 @@ app.post('/api/generate-multiview', async (req, res) => {
       body.model_version = model_version;
     }
 
+    console.log('Tripo multiview request:', JSON.stringify(body, null, 2));
+
     const response = await fetch(`${TRIPO_BASE}/task`, {
       method: 'POST',
       headers: {
@@ -202,6 +211,7 @@ app.post('/api/generate-multiview', async (req, res) => {
     });
 
     const data = await response.json();
+    console.log('Tripo multiview response:', JSON.stringify(data, null, 2));
 
     if (data.code !== 0) {
       return res.status(400).json({ error: data.message || 'Multiview task creation failed', details: data });
