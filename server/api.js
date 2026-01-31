@@ -79,15 +79,20 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       contentType: req.file.mimetype,
     });
 
-    const response = await fetch(`${TRIPO_BASE}/upload`, {
+    const response = await fetch(`${TRIPO_BASE}/upload/sts`, {
       method: 'POST',
       headers: {
+        ...form.getHeaders(),
         Authorization: `Bearer ${apiKey}`,
       },
       body: form,
     });
 
     const data = await response.json();
+
+    // Determine the file extension for later use
+    const mimeToExt = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+    const fileType = mimeToExt[req.file.mimetype] || 'jpg';
 
     // Clean up local file
     fs.unlink(req.file.path, () => {});
@@ -99,6 +104,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     res.json({
       success: true,
       image_token: data.data.image_token,
+      file_type: fileType,
     });
   } catch (err) {
     fs.unlink(req.file.path, () => {});
@@ -114,7 +120,7 @@ app.post('/api/generate', async (req, res) => {
     return res.status(400).json({ error: 'TRIPO_API_KEY is not configured' });
   }
 
-  const { image_token, mode, model_version } = req.body;
+  const { image_token, file_type, model_version } = req.body;
 
   if (!image_token) {
     return res.status(400).json({ error: 'image_token is required' });
@@ -124,7 +130,7 @@ app.post('/api/generate', async (req, res) => {
     const body = {
       type: 'image_to_model',
       file: {
-        type: 'jpg',
+        type: file_type || 'jpg',
         image_token,
       },
     };
@@ -165,15 +171,15 @@ app.post('/api/generate-multiview', async (req, res) => {
     return res.status(400).json({ error: 'TRIPO_API_KEY is not configured' });
   }
 
-  const { image_tokens, model_version } = req.body;
+  const { image_tokens, file_types, model_version } = req.body;
 
   if (!image_tokens || !Array.isArray(image_tokens) || image_tokens.length < 2) {
     return res.status(400).json({ error: 'At least 2 image_tokens are required' });
   }
 
   try {
-    const files = image_tokens.map((token) => ({
-      type: 'jpg',
+    const files = image_tokens.map((token, i) => ({
+      type: (file_types && file_types[i]) || 'jpg',
       image_token: token,
     }));
 

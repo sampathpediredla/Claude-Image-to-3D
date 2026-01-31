@@ -22,12 +22,13 @@ export async function uploadImage(file) {
   return res.json();
 }
 
-export async function generateFromImage(imageToken, options = {}) {
+export async function generateFromImage(imageToken, fileType, options = {}) {
   const res = await fetch(`${API_BASE}/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       image_token: imageToken,
+      file_type: fileType || 'jpg',
       ...options,
     }),
   });
@@ -40,12 +41,13 @@ export async function generateFromImage(imageToken, options = {}) {
   return res.json();
 }
 
-export async function generateFromMultiview(imageTokens, options = {}) {
+export async function generateFromMultiview(imageTokens, fileTypes, options = {}) {
   const res = await fetch(`${API_BASE}/generate-multiview`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       image_tokens: imageTokens,
+      file_types: fileTypes,
       ...options,
     }),
   });

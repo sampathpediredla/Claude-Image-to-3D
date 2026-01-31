@@ -94,7 +94,7 @@ export function useTripoGeneration() {
 
       setState((prev) => ({ ...prev, status: 'generating', progress: 25 }));
 
-      const genResult = await generateFromImage(uploadResult.image_token);
+      const genResult = await generateFromImage(uploadResult.image_token, uploadResult.file_type);
 
       setState((prev) => ({
         ...prev,
@@ -121,10 +121,11 @@ export function useTripoGeneration() {
       const uploadPromises = files.map((f) => uploadImage(f));
       const uploadResults = await Promise.all(uploadPromises);
       const tokens = uploadResults.map((r) => r.image_token);
+      const types = uploadResults.map((r) => r.file_type);
 
       setState((prev) => ({ ...prev, status: 'generating', progress: 25 }));
 
-      const genResult = await generateFromMultiview(tokens);
+      const genResult = await generateFromMultiview(tokens, types);
 
       setState((prev) => ({
         ...prev,
