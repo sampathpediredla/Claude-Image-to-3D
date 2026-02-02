@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import ImageUploader from './components/ImageUploader';
 import ModelViewer from './components/ModelViewer';
+import MaterialPanel from './components/MaterialPanel';
+import RevitExport from './components/RevitExport';
 import StatusBar from './components/StatusBar';
 import { useTripoGeneration } from './hooks/useTripoGeneration';
 import { checkHealth } from './services/tripoApi';
@@ -11,6 +13,10 @@ export default function App() {
   const [image2, setImage2] = useState(null);
   const [mode, setMode] = useState('single');
   const [apiReady, setApiReady] = useState(null);
+  const [materials1, setMaterials1] = useState([]);
+  const [materials2, setMaterials2] = useState([]);
+  const [materialsMV, setMaterialsMV] = useState([]);
+  const [activeTab, setActiveTab] = useState('viewer');
 
   const gen1 = useTripoGeneration();
   const gen2 = useTripoGeneration();
@@ -44,6 +50,9 @@ export default function App() {
     genMultiview.reset();
     setImage1(null);
     setImage2(null);
+    setMaterials1([]);
+    setMaterials2([]);
+    setMaterialsMV([]);
   }, [gen1, gen2, genMultiview]);
 
   const canGenerate =
@@ -51,8 +60,9 @@ export default function App() {
       ? (image1 || image2) && !isProcessing
       : image1 && image2 && !isProcessing;
 
-  const activeGen = mode === 'multiview' ? genMultiview : gen1;
-  const showSecondViewer = mode === 'single' && image2;
+  // Determine the active model URL and materials for the side panels
+  const activeModelUrl = mode === 'multiview' ? genMultiview.modelUrl : (gen1.modelUrl || gen2.modelUrl);
+  const activeMaterials = mode === 'multiview' ? materialsMV : (materials1.length ? materials1 : materials2);
 
   return (
     <div className="app">
@@ -81,6 +91,7 @@ export default function App() {
       )}
 
       <main className="app-main">
+        {/* Upload Section */}
         <section className="upload-section">
           <div className="section-header">
             <h2>Upload Images</h2>
@@ -109,16 +120,8 @@ export default function App() {
           </p>
 
           <div className="uploaders">
-            <ImageUploader
-              label="Image 1"
-              onImageSelect={setImage1}
-              disabled={isProcessing}
-            />
-            <ImageUploader
-              label="Image 2"
-              onImageSelect={setImage2}
-              disabled={isProcessing}
-            />
+            <ImageUploader label="Image 1" onImageSelect={setImage1} disabled={isProcessing} />
+            <ImageUploader label="Image 2" onImageSelect={setImage2} disabled={isProcessing} />
           </div>
 
           <div className="actions">
@@ -136,68 +139,85 @@ export default function App() {
                 'Generate 3D Model'
               )}
             </button>
-            <button
-              className="btn btn-secondary"
-              onClick={handleReset}
-              disabled={isProcessing}
-            >
+            <button className="btn btn-secondary" onClick={handleReset} disabled={isProcessing}>
               Reset
             </button>
           </div>
         </section>
 
-        <section className="results-section">
-          <h2>3D Results</h2>
+        {/* Viewport + Side Panels */}
+        <section className="workspace-section">
+          <h2>3D Workspace</h2>
 
-          {mode === 'single' ? (
-            <div className="results-grid">
-              <div className="result-card">
-                <h3>Model from Image 1</h3>
-                {gen1.status !== 'idle' && (
-                  <StatusBar status={gen1.status} progress={gen1.progress} error={gen1.error} />
-                )}
-                <div className="viewer-wrapper">
-                  <ModelViewer modelUrl={gen1.modelUrl} renderedImage={gen1.renderedImage} />
+          {/* Tab bar for side panels on smaller screens */}
+          <div className="workspace-tabs">
+            <button className={`tab-btn ${activeTab === 'viewer' ? 'active' : ''}`}
+              onClick={() => setActiveTab('viewer')}>Viewport</button>
+            <button className={`tab-btn ${activeTab === 'materials' ? 'active' : ''}`}
+              onClick={() => setActiveTab('materials')}>Materials</button>
+            <button className={`tab-btn ${activeTab === 'revit' ? 'active' : ''}`}
+              onClick={() => setActiveTab('revit')}>Revit Export</button>
+          </div>
+
+          <div className="workspace-layout">
+            {/* 3D Viewport */}
+            <div className={`workspace-viewport ${activeTab === 'viewer' ? 'tab-active' : ''}`}>
+              {mode === 'single' ? (
+                <div className="viewport-stack">
+                  <div className="viewport-card">
+                    <div className="viewport-label">Model from Image 1</div>
+                    {gen1.status !== 'idle' && (
+                      <StatusBar status={gen1.status} progress={gen1.progress} error={gen1.error} />
+                    )}
+                    <div className="viewer-wrapper">
+                      <ModelViewer modelUrl={gen1.modelUrl} onMaterialsExtracted={setMaterials1} />
+                    </div>
+                  </div>
+                  {image2 && (
+                    <div className="viewport-card">
+                      <div className="viewport-label">Model from Image 2</div>
+                      {gen2.status !== 'idle' && (
+                        <StatusBar status={gen2.status} progress={gen2.progress} error={gen2.error} />
+                      )}
+                      <div className="viewer-wrapper">
+                        <ModelViewer modelUrl={gen2.modelUrl} onMaterialsExtracted={setMaterials2} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-              {showSecondViewer && (
-                <div className="result-card">
-                  <h3>Model from Image 2</h3>
-                  {gen2.status !== 'idle' && (
-                    <StatusBar status={gen2.status} progress={gen2.progress} error={gen2.error} />
+              ) : (
+                <div className="viewport-card">
+                  <div className="viewport-label">Multiview 3D Model</div>
+                  {genMultiview.status !== 'idle' && (
+                    <StatusBar
+                      status={genMultiview.status}
+                      progress={genMultiview.progress}
+                      error={genMultiview.error}
+                    />
                   )}
                   <div className="viewer-wrapper">
-                    <ModelViewer modelUrl={gen2.modelUrl} renderedImage={gen2.renderedImage} />
+                    <ModelViewer modelUrl={genMultiview.modelUrl} onMaterialsExtracted={setMaterialsMV} />
                   </div>
                 </div>
               )}
             </div>
-          ) : (
-            <div className="results-grid single">
-              <div className="result-card wide">
-                <h3>Multiview 3D Model</h3>
-                {genMultiview.status !== 'idle' && (
-                  <StatusBar
-                    status={genMultiview.status}
-                    progress={genMultiview.progress}
-                    error={genMultiview.error}
-                  />
-                )}
-                <div className="viewer-wrapper">
-                  <ModelViewer
-                    modelUrl={genMultiview.modelUrl}
-                    renderedImage={genMultiview.renderedImage}
-                  />
-                </div>
+
+            {/* Side Panels */}
+            <div className="workspace-sidebar">
+              <div className={`sidebar-panel ${activeTab === 'materials' ? 'tab-active' : ''}`}>
+                <MaterialPanel materials={activeMaterials} />
+              </div>
+              <div className={`sidebar-panel ${activeTab === 'revit' ? 'tab-active' : ''}`}>
+                <RevitExport materials={activeMaterials} modelUrl={activeModelUrl} />
               </div>
             </div>
-          )}
+          </div>
         </section>
       </main>
 
       <footer className="app-footer">
         <p>
-          Built with React &amp; Tripo AI &mdash;{' '}
+          Built with React, Three.js &amp; Tripo AI &mdash;{' '}
           <a href="https://platform.tripo3d.ai/api-keys" target="_blank" rel="noopener noreferrer">
             Get a free API key
           </a>
