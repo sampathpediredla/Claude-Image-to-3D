@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import ImageUploader from './components/ImageUploader';
 import ModelViewer from './components/ModelViewer';
 import MaterialPanel from './components/MaterialPanel';
@@ -6,21 +6,21 @@ import RevitExport from './components/RevitExport';
 import StatusBar from './components/StatusBar';
 import { useTripoGeneration } from './hooks/useTripoGeneration';
 import { checkHealth } from './services/tripoApi';
+import { loadImage, createMaterialIdLookup } from './utils/materialIdParser';
+import { segmentModel } from './utils/modelSegmenter';
 import './App.css';
 
 export default function App() {
-  const [image1, setImage1] = useState(null);
-  const [image2, setImage2] = useState(null);
-  const [mode, setMode] = useState('single');
+  const [objectImage, setObjectImage] = useState(null);
+  const [materialIdImage, setMaterialIdImage] = useState(null);
   const [apiReady, setApiReady] = useState(null);
-  const [materials1, setMaterials1] = useState([]);
-  const [materials2, setMaterials2] = useState([]);
-  const [materialsMV, setMaterialsMV] = useState([]);
+  const [layers, setLayers] = useState([]);
+  const [segmenting, setSegmenting] = useState(false);
   const [activeTab, setActiveTab] = useState('viewer');
 
-  const gen1 = useTripoGeneration();
-  const gen2 = useTripoGeneration();
-  const genMultiview = useTripoGeneration();
+  const gen = useTripoGeneration();
+  const loadedModelRef = useRef(null);
+  const materialIdFileRef = useRef(null);
 
   useEffect(() => {
     checkHealth()
@@ -29,40 +29,83 @@ export default function App() {
   }, []);
 
   const isProcessing =
-    gen1.status !== 'idle' && gen1.status !== 'success' && gen1.status !== 'error' ||
-    gen2.status !== 'idle' && gen2.status !== 'success' && gen2.status !== 'error' ||
-    genMultiview.status !== 'idle' && genMultiview.status !== 'success' && genMultiview.status !== 'error';
+    gen.status !== 'idle' && gen.status !== 'success' && gen.status !== 'error';
 
-  const handleGenerate = useCallback(() => {
-    if (mode === 'single') {
-      if (image1) gen1.generateSingle(image1);
-      if (image2) gen2.generateSingle(image2);
-    } else {
-      if (image1 && image2) {
-        genMultiview.generateMultiview([image1, image2]);
-      }
+  // When the GLB finishes loading, run Material ID segmentation if we have both
+  const handleModelLoaded = useCallback(async (model) => {
+    loadedModelRef.current = model;
+
+    if (materialIdFileRef.current) {
+      await runSegmentation(model, materialIdFileRef.current);
     }
-  }, [mode, image1, image2, gen1, gen2, genMultiview]);
+  }, []);
+
+  // Run segmentation: project Material ID image onto the 3D model
+  async function runSegmentation(model, matIdFile) {
+    setSegmenting(true);
+    try {
+      const img = await loadImage(matIdFile);
+      const lookup = createMaterialIdLookup(img);
+      const result = segmentModel(model, lookup);
+      setLayers(result);
+    } catch (err) {
+      console.error('Segmentation error:', err);
+    } finally {
+      setSegmenting(false);
+    }
+  }
+
+  // Generate 3D model from the object photo
+  const handleGenerate = useCallback(() => {
+    if (!objectImage) return;
+    setLayers([]);
+    gen.generateSingle(objectImage);
+  }, [objectImage, gen]);
 
   const handleReset = useCallback(() => {
-    gen1.reset();
-    gen2.reset();
-    genMultiview.reset();
-    setImage1(null);
-    setImage2(null);
-    setMaterials1([]);
-    setMaterials2([]);
-    setMaterialsMV([]);
-  }, [gen1, gen2, genMultiview]);
+    gen.reset();
+    setObjectImage(null);
+    setMaterialIdImage(null);
+    setLayers([]);
+    loadedModelRef.current = null;
+    materialIdFileRef.current = null;
+  }, [gen]);
 
-  const canGenerate =
-    mode === 'single'
-      ? (image1 || image2) && !isProcessing
-      : image1 && image2 && !isProcessing;
+  // Track the Material ID file so we can use it when the model loads
+  const handleMaterialIdSelect = useCallback((file) => {
+    setMaterialIdImage(file);
+    materialIdFileRef.current = file;
 
-  // Determine the active model URL and materials for the side panels
-  const activeModelUrl = mode === 'multiview' ? genMultiview.modelUrl : (gen1.modelUrl || gen2.modelUrl);
-  const activeMaterials = mode === 'multiview' ? materialsMV : (materials1.length ? materials1 : materials2);
+    // If model is already loaded, re-segment immediately
+    if (file && loadedModelRef.current) {
+      runSegmentation(loadedModelRef.current, file);
+    } else if (!file) {
+      setLayers([]);
+    }
+  }, []);
+
+  // Toggle layer visibility in the 3D viewer
+  const handleToggleLayer = useCallback((layerIndex) => {
+    setLayers((prev) =>
+      prev.map((l) => {
+        if (l.index === layerIndex) {
+          const newVisible = !l.visible;
+          if (l.mesh) l.mesh.visible = newVisible;
+          return { ...l, visible: newVisible };
+        }
+        return l;
+      })
+    );
+  }, []);
+
+  // Rename a layer
+  const handleRenameLayer = useCallback((layerIndex, newName) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.index === layerIndex ? { ...l, name: newName } : l
+      )
+    );
+  }, []);
 
   return (
     <div className="app">
@@ -93,42 +136,32 @@ export default function App() {
       <main className="app-main">
         {/* Upload Section */}
         <section className="upload-section">
-          <div className="section-header">
-            <h2>Upload Images</h2>
-            <div className="mode-toggle">
-              <button
-                className={`mode-btn ${mode === 'single' ? 'active' : ''}`}
-                onClick={() => setMode('single')}
-                disabled={isProcessing}
-              >
-                Individual
-              </button>
-              <button
-                className={`mode-btn ${mode === 'multiview' ? 'active' : ''}`}
-                onClick={() => setMode('multiview')}
-                disabled={isProcessing}
-              >
-                Multiview
-              </button>
-            </div>
-          </div>
-
+          <h2>Upload Images</h2>
           <p className="mode-description">
-            {mode === 'single'
-              ? 'Generate a separate 3D model from each image independently.'
-              : 'Combine both images as multiple views to generate one higher-quality 3D model.'}
+            Upload a photo of the object and a Material ID image. The Material ID colors are used to
+            split the generated 3D model into separate layers for Revit import.
           </p>
 
           <div className="uploaders">
-            <ImageUploader label="Image 1" onImageSelect={setImage1} disabled={isProcessing} />
-            <ImageUploader label="Image 2" onImageSelect={setImage2} disabled={isProcessing} />
+            <ImageUploader
+              label="Object Photo"
+              hint="Regular photo of the object to generate 3D model from"
+              onImageSelect={setObjectImage}
+              disabled={isProcessing}
+            />
+            <ImageUploader
+              label="Material ID"
+              hint="Color-coded image where each flat color = a separate layer"
+              onImageSelect={handleMaterialIdSelect}
+              disabled={isProcessing}
+            />
           </div>
 
           <div className="actions">
             <button
               className="btn btn-primary"
               onClick={handleGenerate}
-              disabled={!canGenerate || apiReady === false}
+              disabled={!objectImage || isProcessing || apiReady === false}
             >
               {isProcessing ? (
                 <>
@@ -145,70 +178,53 @@ export default function App() {
           </div>
         </section>
 
-        {/* Viewport + Side Panels */}
+        {/* Status */}
+        {gen.status !== 'idle' && (
+          <StatusBar status={gen.status} progress={gen.progress} error={gen.error} />
+        )}
+
+        {segmenting && (
+          <div className="segmenting-bar">
+            <span className="spinner small" /> Segmenting model by Material ID colors...
+          </div>
+        )}
+
+        {/* Workspace */}
         <section className="workspace-section">
           <h2>3D Workspace</h2>
 
-          {/* Tab bar for side panels on smaller screens */}
           <div className="workspace-tabs">
             <button className={`tab-btn ${activeTab === 'viewer' ? 'active' : ''}`}
               onClick={() => setActiveTab('viewer')}>Viewport</button>
             <button className={`tab-btn ${activeTab === 'materials' ? 'active' : ''}`}
-              onClick={() => setActiveTab('materials')}>Materials</button>
+              onClick={() => setActiveTab('materials')}>Layers</button>
             <button className={`tab-btn ${activeTab === 'revit' ? 'active' : ''}`}
-              onClick={() => setActiveTab('revit')}>Revit Export</button>
+              onClick={() => setActiveTab('revit')}>Export</button>
           </div>
 
           <div className="workspace-layout">
-            {/* 3D Viewport */}
             <div className={`workspace-viewport ${activeTab === 'viewer' ? 'tab-active' : ''}`}>
-              {mode === 'single' ? (
-                <div className="viewport-stack">
-                  <div className="viewport-card">
-                    <div className="viewport-label">Model from Image 1</div>
-                    {gen1.status !== 'idle' && (
-                      <StatusBar status={gen1.status} progress={gen1.progress} error={gen1.error} />
-                    )}
-                    <div className="viewer-wrapper">
-                      <ModelViewer modelUrl={gen1.modelUrl} onMaterialsExtracted={setMaterials1} />
-                    </div>
-                  </div>
-                  {image2 && (
-                    <div className="viewport-card">
-                      <div className="viewport-label">Model from Image 2</div>
-                      {gen2.status !== 'idle' && (
-                        <StatusBar status={gen2.status} progress={gen2.progress} error={gen2.error} />
-                      )}
-                      <div className="viewer-wrapper">
-                        <ModelViewer modelUrl={gen2.modelUrl} onMaterialsExtracted={setMaterials2} />
-                      </div>
-                    </div>
-                  )}
+              <div className="viewport-card">
+                <div className="viewer-wrapper">
+                  <ModelViewer
+                    modelUrl={gen.modelUrl}
+                    layers={layers}
+                    onModelLoaded={handleModelLoaded}
+                  />
                 </div>
-              ) : (
-                <div className="viewport-card">
-                  <div className="viewport-label">Multiview 3D Model</div>
-                  {genMultiview.status !== 'idle' && (
-                    <StatusBar
-                      status={genMultiview.status}
-                      progress={genMultiview.progress}
-                      error={genMultiview.error}
-                    />
-                  )}
-                  <div className="viewer-wrapper">
-                    <ModelViewer modelUrl={genMultiview.modelUrl} onMaterialsExtracted={setMaterialsMV} />
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
-            {/* Side Panels */}
             <div className="workspace-sidebar">
               <div className={`sidebar-panel ${activeTab === 'materials' ? 'tab-active' : ''}`}>
-                <MaterialPanel materials={activeMaterials} />
+                <MaterialPanel
+                  layers={layers}
+                  onToggleLayer={handleToggleLayer}
+                  onRenameLayer={handleRenameLayer}
+                />
               </div>
               <div className={`sidebar-panel ${activeTab === 'revit' ? 'tab-active' : ''}`}>
-                <RevitExport materials={activeMaterials} modelUrl={activeModelUrl} />
+                <RevitExport layers={layers} modelUrl={gen.modelUrl} />
               </div>
             </div>
           </div>

@@ -28,10 +28,32 @@
 }
 
 .panel-empty {
-  padding: 1.5rem 1rem;
+  padding: 2rem 1rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.panel-empty p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.panel-empty span {
+  font-size: 0.8rem;
+}
+
+.layer-stats {
+  padding: 0.4rem 1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface);
 }
 
 .material-list {
@@ -39,141 +61,102 @@
   overflow-y: auto;
 }
 
-.material-card {
-  padding: 0.65rem 1rem;
+/* Layer rows */
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
-  cursor: pointer;
-  transition: background 0.15s;
+  transition: opacity 0.2s;
 }
 
-.material-card:last-child {
+.layer-row:last-child {
   border-bottom: none;
 }
 
-.material-card:hover {
+.layer-row:hover {
   background: var(--surface);
 }
 
-.mat-summary {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
+.layer-row.hidden-layer {
+  opacity: 0.45;
 }
 
-.mat-swatch {
+/* Visibility toggle button */
+.visibility-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 28px;
   height: 28px;
+  border: none;
+  background: var(--surface);
   border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.visibility-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.hidden-layer .visibility-btn {
+  color: var(--text-muted);
+}
+
+/* Color swatch */
+.layer-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
   border: 2px solid var(--border-color);
   flex-shrink: 0;
 }
 
-.mat-info {
+/* Layer info */
+.layer-info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  gap: 0.15rem;
 }
 
-.mat-name {
+.layer-name-input {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mat-type {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-}
-
-.mat-hex {
-  font-size: 0.75rem;
-  font-family: monospace;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.mat-chevron {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  transition: transform 0.2s;
-}
-
-.mat-chevron.open {
-  transform: rotate(180deg);
-}
-
-/* Expanded details */
-.mat-details {
-  margin-top: 0.6rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.mat-detail-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem;
-}
-
-.detail-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.25rem 0.5rem;
-  background: var(--surface);
+  font-family: inherit;
+  padding: 0.1rem 0.25rem;
+  margin: -0.1rem -0.25rem;
   border-radius: 4px;
+  outline: none;
+  width: 100%;
 }
 
-.detail-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+.layer-name-input:focus {
+  background: var(--surface);
+  outline: 1px solid var(--primary);
 }
 
-.detail-value {
+.layer-meta {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  font-family: monospace;
-}
-
-.detail-swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  border: 1px solid var(--border-color);
-}
-
-/* Meshes list */
-.mat-meshes {
-  margin-top: 0.5rem;
-}
-
-.meshes-label {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  display: block;
-  margin-bottom: 0.3rem;
-}
-
-.mesh-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.mesh-tag {
   font-size: 0.7rem;
-  background: var(--surface);
-  border: 1px solid var(--border-color);
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+}
+
+.layer-hex {
   font-family: monospace;
+}
+
+.layer-sep {
+  opacity: 0.5;
 }

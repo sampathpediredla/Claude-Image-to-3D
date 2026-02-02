@@ -4,20 +4,44 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import './ModelViewer.css';
 
-export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
+/**
+ * Three.js viewport with orbit controls.
+ *
+ * Props:
+ *  - modelUrl: URL to a GLB file
+ *  - layers: optional array of segmented layer objects (from modelSegmenter)
+ *  - onModelLoaded: callback(model) when GLB finishes loading (before segmentation)
+ */
+export default function ModelViewer({ modelUrl, layers, onModelLoaded }) {
   const containerRef = useRef(null);
   const rendererRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
   const frameIdRef = useRef(null);
-  const modelRef = useRef(null);
+  const layerGroupRef = useRef(null);
+  const rawModelRef = useRef(null);
   const [loading, setLoading] = useState(false);
 
+  // Clean up any model objects from the scene
   const cleanupScene = useCallback(() => {
-    if (modelRef.current && sceneRef.current) {
-      sceneRef.current.remove(modelRef.current);
-      modelRef.current.traverse((child) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    if (layerGroupRef.current) {
+      scene.remove(layerGroupRef.current);
+      layerGroupRef.current.traverse((child) => {
+        if (child.isMesh) {
+          child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        }
+      });
+      layerGroupRef.current = null;
+    }
+
+    if (rawModelRef.current) {
+      scene.remove(rawModelRef.current);
+      rawModelRef.current.traverse((child) => {
         if (child.isMesh) {
           child.geometry.dispose();
           if (Array.isArray(child.material)) {
@@ -27,11 +51,11 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
           }
         }
       });
-      modelRef.current = null;
+      rawModelRef.current = null;
     }
   }, []);
 
-  // Initialize Three.js scene
+  // Initialize Three.js scene (runs once)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -63,27 +87,24 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
     controlsRef.current = controls;
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.0);
-    dirLight1.position.set(5, 8, 5);
-    dirLight1.castShadow = true;
-    scene.add(dirLight1);
+    const dir1 = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir1.position.set(5, 8, 5);
+    scene.add(dir1);
 
-    const dirLight2 = new THREE.DirectionalLight(0x8888ff, 0.4);
-    dirLight2.position.set(-3, 4, -3);
-    scene.add(dirLight2);
+    const dir2 = new THREE.DirectionalLight(0x8888ff, 0.4);
+    dir2.position.set(-3, 4, -3);
+    scene.add(dir2);
 
-    const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    rimLight.position.set(0, -2, -5);
-    scene.add(rimLight);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.3);
+    rim.position.set(0, -2, -5);
+    scene.add(rim);
 
-    // Grid helper
-    const grid = new THREE.GridHelper(6, 24, 0x2a2d3e, 0x1e2030);
-    scene.add(grid);
+    // Grid
+    scene.add(new THREE.GridHelper(6, 24, 0x2a2d3e, 0x1e2030));
 
-    // Animation loop
+    // Render loop
     function animate() {
       frameIdRef.current = requestAnimationFrame(animate);
       controls.update();
@@ -91,20 +112,18 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
     }
     animate();
 
-    // Resize handler
-    const handleResize = () => {
-      if (!container) return;
+    // Resize
+    const ro = new ResizeObserver(() => {
       const w = container.clientWidth;
       const h = container.clientHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
-    };
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(container);
+    });
+    ro.observe(container);
 
     return () => {
-      resizeObserver.disconnect();
+      ro.disconnect();
       cancelAnimationFrame(frameIdRef.current);
       controls.dispose();
       renderer.dispose();
@@ -114,7 +133,7 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
     };
   }, []);
 
-  // Load model when URL changes
+  // Load GLB model when modelUrl changes
   useEffect(() => {
     if (!modelUrl || !sceneRef.current) return;
 
@@ -127,7 +146,7 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
       (gltf) => {
         const model = gltf.scene;
 
-        // Compute bounding box and center/scale the model
+        // Center and scale the model
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
@@ -135,10 +154,11 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
         const scale = 2 / maxDim;
         model.scale.setScalar(scale);
         model.position.sub(center.multiplyScalar(scale));
-        model.position.y -= (box.min.y * scale);
+        model.position.y -= box.min.y * scale;
 
+        // Store as raw model (will be hidden once layers are applied)
         sceneRef.current.add(model);
-        modelRef.current = model;
+        rawModelRef.current = model;
 
         // Reset camera
         if (controlsRef.current && cameraRef.current) {
@@ -147,10 +167,8 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
           controlsRef.current.update();
         }
 
-        // Extract materials
-        const materials = extractMaterials(model);
-        if (onMaterialsExtracted) {
-          onMaterialsExtracted(materials);
+        if (onModelLoaded) {
+          onModelLoaded(model);
         }
 
         setLoading(false);
@@ -161,8 +179,44 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
         setLoading(false);
       }
     );
-  }, [modelUrl, cleanupScene, onMaterialsExtracted]);
+  }, [modelUrl, cleanupScene, onModelLoaded]);
 
+  // When segmented layers arrive, swap them in and hide the raw model
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !layers || layers.length === 0) return;
+
+    // Hide raw model
+    if (rawModelRef.current) {
+      rawModelRef.current.visible = false;
+    }
+
+    // Remove previous layer group
+    if (layerGroupRef.current) {
+      scene.remove(layerGroupRef.current);
+    }
+
+    const group = new THREE.Group();
+    group.name = 'SegmentedLayers';
+
+    // Center the layer meshes the same way as the raw model
+    if (rawModelRef.current) {
+      group.scale.copy(rawModelRef.current.scale);
+      group.position.copy(rawModelRef.current.position);
+    }
+
+    for (const layer of layers) {
+      if (layer.mesh) {
+        layer.mesh.visible = layer.visible !== false;
+        group.add(layer.mesh);
+      }
+    }
+
+    scene.add(group);
+    layerGroupRef.current = group;
+  }, [layers]);
+
+  // Placeholder when no model
   if (!modelUrl) {
     return (
       <div className="model-viewer-placeholder">
@@ -171,8 +225,8 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
           <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
           <line x1="12" y1="22.08" x2="12" y2="12" />
         </svg>
-        <p>Your 3D model will appear here</p>
-        <span>Upload images and click Generate to get started</span>
+        <p>3D viewport</p>
+        <span>Upload an object photo and generate to see the model</span>
       </div>
     );
   }
@@ -188,59 +242,6 @@ export default function ModelViewer({ modelUrl, onMaterialsExtracted }) {
       <div className="viewer-controls-hint">
         Drag to orbit &middot; Scroll to zoom &middot; Right-click to pan
       </div>
-      <a
-        href={modelUrl}
-        download="model.glb"
-        className="download-btn"
-        title="Download GLB"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-          <polyline points="7 10 12 15 17 10" />
-          <line x1="12" y1="15" x2="12" y2="3" />
-        </svg>
-        GLB
-      </a>
     </div>
   );
-}
-
-function extractMaterials(model) {
-  const materialsMap = new Map();
-
-  model.traverse((child) => {
-    if (!child.isMesh || !child.material) return;
-
-    const mats = Array.isArray(child.material) ? child.material : [child.material];
-    mats.forEach((mat) => {
-      if (materialsMap.has(mat.uuid)) return;
-
-      const color = mat.color ? '#' + mat.color.getHexString() : '#cccccc';
-      const emissive = mat.emissive ? '#' + mat.emissive.getHexString() : '#000000';
-
-      materialsMap.set(mat.uuid, {
-        id: mat.uuid,
-        name: mat.name || `Material_${materialsMap.size}`,
-        color,
-        emissive,
-        metalness: mat.metalness ?? 0,
-        roughness: mat.roughness ?? 1,
-        opacity: mat.opacity ?? 1,
-        transparent: mat.transparent || false,
-        type: mat.type,
-        meshNames: [],
-      });
-    });
-
-    // Track which meshes use this material
-    const matList = Array.isArray(child.material) ? child.material : [child.material];
-    matList.forEach((mat) => {
-      const entry = materialsMap.get(mat.uuid);
-      if (entry) {
-        entry.meshNames.push(child.name || 'unnamed');
-      }
-    });
-  });
-
-  return Array.from(materialsMap.values());
 }

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import './ImageUploader.css';
 
-export default function ImageUploader({ label, onImageSelect, disabled }) {
+export default function ImageUploader({ label, hint, onImageSelect, disabled }) {
   const [preview, setPreview] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef(null);
@@ -66,6 +66,7 @@ export default function ImageUploader({ label, onImageSelect, disabled }) {
   return (
     <div className="image-uploader">
       <label className="uploader-label">{label}</label>
+      {hint && <span className="uploader-hint">{hint}</span>}
       <div
         className={`drop-zone ${dragActive ? 'drag-active' : ''} ${preview ? 'has-preview' : ''} ${disabled ? 'disabled' : ''}`}
         onDragEnter={handleDrag}

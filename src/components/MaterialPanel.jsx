@@ -1,93 +1,86 @@
-import { useState } from 'react';
 import './MaterialPanel.css';
 
-export default function MaterialPanel({ materials }) {
-  const [expanded, setExpanded] = useState(null);
-
-  if (!materials || materials.length === 0) {
+/**
+ * Shows Material ID layers extracted from the model with visibility toggles.
+ *
+ * Props:
+ *  - layers: array of { index, color, name, percentage, faceCount, visible }
+ *  - onToggleLayer: (index) => void
+ *  - onRenameLayer: (index, newName) => void
+ */
+export default function MaterialPanel({ layers, onToggleLayer, onRenameLayer }) {
+  if (!layers || layers.length === 0) {
     return (
       <div className="material-panel">
         <div className="panel-header">
-          <h3>Materials</h3>
+          <h3>Material ID Layers</h3>
         </div>
         <div className="panel-empty">
-          No materials extracted yet. Generate a 3D model to see material data.
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32" style={{ opacity: 0.4 }}>
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M3 9h18" />
+            <path d="M9 21V9" />
+          </svg>
+          <p>No layers yet</p>
+          <span>Upload a Material ID image and generate a model to see layers here.</span>
         </div>
       </div>
     );
   }
 
+  const totalFaces = layers.reduce((sum, l) => sum + l.faceCount, 0);
+
   return (
     <div className="material-panel">
       <div className="panel-header">
-        <h3>Materials</h3>
-        <span className="mat-count">{materials.length} found</span>
+        <h3>Material ID Layers</h3>
+        <span className="mat-count">{layers.length} layers</span>
+      </div>
+
+      <div className="layer-stats">
+        <span>{totalFaces.toLocaleString()} faces total</span>
       </div>
 
       <div className="material-list">
-        {materials.map((mat, i) => (
-          <div
-            key={mat.id}
-            className={`material-card ${expanded === i ? 'expanded' : ''}`}
-            onClick={() => setExpanded(expanded === i ? null : i)}
-          >
-            <div className="mat-summary">
-              <div className="mat-swatch" style={{ background: mat.color }} />
-              <div className="mat-info">
-                <span className="mat-name">{mat.name}</span>
-                <span className="mat-type">{mat.type}</span>
+        {layers.map((layer) => (
+          <div key={layer.index} className={`layer-row ${!layer.visible ? 'hidden-layer' : ''}`}>
+            <button
+              className="visibility-btn"
+              onClick={() => onToggleLayer && onToggleLayer(layer.index)}
+              title={layer.visible ? 'Hide layer' : 'Show layer'}
+            >
+              {layer.visible ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+              )}
+            </button>
+
+            <div className="layer-swatch" style={{ background: layer.color }} />
+
+            <div className="layer-info">
+              <input
+                className="layer-name-input"
+                value={layer.name}
+                onChange={(e) => onRenameLayer && onRenameLayer(layer.index, e.target.value)}
+                title="Click to rename layer"
+              />
+              <div className="layer-meta">
+                <span className="layer-hex">{layer.color.toUpperCase()}</span>
+                <span className="layer-sep">&middot;</span>
+                <span>{layer.faceCount.toLocaleString()} faces</span>
+                <span className="layer-sep">&middot;</span>
+                <span>{layer.percentage}%</span>
               </div>
-              <span className="mat-hex">{mat.color.toUpperCase()}</span>
-              <svg
-                className={`mat-chevron ${expanded === i ? 'open' : ''}`}
-                viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="2" width="16" height="16"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
             </div>
-
-            {expanded === i && (
-              <div className="mat-details">
-                <div className="mat-detail-grid">
-                  <DetailRow label="Color" value={mat.color.toUpperCase()}>
-                    <div className="detail-swatch" style={{ background: mat.color }} />
-                  </DetailRow>
-                  <DetailRow label="Emissive" value={mat.emissive.toUpperCase()}>
-                    <div className="detail-swatch" style={{ background: mat.emissive }} />
-                  </DetailRow>
-                  <DetailRow label="Metalness" value={mat.metalness.toFixed(2)} />
-                  <DetailRow label="Roughness" value={mat.roughness.toFixed(2)} />
-                  <DetailRow label="Opacity" value={mat.opacity.toFixed(2)} />
-                  <DetailRow label="Transparent" value={mat.transparent ? 'Yes' : 'No'} />
-                </div>
-
-                {mat.meshNames.length > 0 && (
-                  <div className="mat-meshes">
-                    <span className="meshes-label">Used by:</span>
-                    <div className="mesh-tags">
-                      {mat.meshNames.map((name, j) => (
-                        <span key={j} className="mesh-tag">{name}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function DetailRow({ label, value, children }) {
-  return (
-    <div className="detail-row">
-      <span className="detail-label">{label}</span>
-      <div className="detail-value">
-        {children}
-        <span>{value}</span>
       </div>
     </div>
   );

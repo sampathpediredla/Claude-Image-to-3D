@@ -264,9 +264,69 @@
   cursor: not-allowed;
 }
 
+.export-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.export-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.revit-export-btn.secondary {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 0.8rem;
+  margin-top: 0;
+}
+
+.revit-export-btn.secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  box-shadow: none;
+  transform: none;
+}
+
 .export-hint {
   margin: 0;
   text-align: center;
   font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+.import-steps {
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.import-steps .steps-title {
+  margin: 0 0 0.3rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.import-steps ol {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.import-steps li {
+  margin-bottom: 0.2rem;
+}
+
+.import-steps code {
+  background: var(--bg-secondary);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
 }
